@@ -67,6 +67,7 @@ groundhog.library(c("tidyverse",      # basic data handling
 sessionInfo()
 set.seed(1234) 
 ```
+
 # Read data. 
 We use the 4th wave (WaveY) to analyze. Because relationships formed a few months after school entry tend to be more stable than those formed immediately upon entry.
 ```{r}
