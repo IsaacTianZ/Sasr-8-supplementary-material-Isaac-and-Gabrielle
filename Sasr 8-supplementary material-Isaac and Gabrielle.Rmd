@@ -1,0 +1,311 @@
+---
+title: "SaSR 8 supplementary material-Isaac and Gabrielle"
+author: "Isaac Tian & Gabrielle Ding"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-05-15"
+---
+# Title
+Not All Homophily Is Positive: 
+Academic and Gender Homophily in Negative Network Formation
+
+# Abstract
+Previous studies have predominantly focused on the role of homophily in the formation of positive social ties, while much less attention has been paid to whether certain forms of homophily might also contribute to the emergence of negative networks. To explore the homophily mechanisms underlying negative networks, we chose the bullying network and the dislike network as outcomes. This is because bullying and dislike ties reveal conflict, exclusion, and power imbalances within groups. Understanding these relationships has strong social significance, such as informing educational interventions.
+
+Based on data from Knecht (2003/04, 4th wave), our findings reveal that pupils with lower average academic achievement are more likely to be involved in negative networks. Furthermore, greater heterogeneity rather than homophily in academic achievement within a classroom increases the likelihood of dislike ties. In terms of gender, cross-gender interactions are more likely to result in dislike ties. Notably, however, same-gender similarity appears to increase the probability of forming bullying ties.
+
+# The research problem
+Can Homophily in Academic Achievement and Gender Foster Negative Networks?
+
+# Theoretical background & Hypothesis
+As an individual attribute, academic achievement may positively influence a pupil's popularity within the classroom (Gorman et al., 2002). Conversely, lower academic performance may lead to marginalization, thereby increasing the likelihood of forming negative ties with peers. From this, we derive the following research hypothesis:
+
+## H1: Lower academic achievement increases the likelihood of pupils forming negative ties—dislike ties (H1a) and bullying ties (H1b)
+
+While homophily preferences often facilitate the formation of positive ties, they may also carry potential negative consequences (Ertug et al., 2022). Similarity in academic achievement can foster peer competition, which in turn may increase the likelihood of negative social ties.From this, we derive the following research hypothesis:
+
+## H2: Greater similarity in academic achievement increases the likelihood of pupils forming negative ties—dislike ties (H2a) and bullying ties (H2b)
+
+Similarly, due to differing gendered social expectations, same-gender peers may experience heightened competition in certain domains—such as the use of branded cosmetics or the possession of expensive sneakers. These forms of peer competition may also increase the likelihood of negative relationship formation. Therefore, we get the hypothesis:
+
+## H3: Same-gender peers are more likely to form negative ties—dislike ties (H3a) and bullying ties (H3b)
+
+To test these three hypotheses, we constructed both dislike and bullying networks using data from all classrooms. The ERGM terms included pupils’ average academic achievement, the absolute difference in academic achievement between pupils, gender homophily and other structural terms. The results report estimated coefficients, statistical significance levels, and goodness-of-fit measures along with diagnostic plots. Finally, two classroom networks were visualized as illustrative examples.
+
+# Why do we use ERGM.MULTI?
+Using ERGM allows us to observe which structural terms increase the likelihood of forming negative ties. 
+To examine the stability of this trend, we used ergm.multi, as it enables us to assess whether there are consistent patterns across multiple classroom networks.
+
+# Reference
+Gorman, A. H., Kim, J., & Schimmelbusch, A. (2002). The attributes adolescents associate with peer popularity and teacher preference. Journal of School Psychology, 40(2), 143-165.
+
+Ertug, G., Brennecke, J., Kovács, B., & Zou, T. (2022). What Does Homophily Do? A Review of the Consequences of Homophily. Academy of Management Annals, 16(1), 38–69. https://doi.org/10.5465/annals.2020.0230
+
+Krivitsky, P. N., Coletti, P., & Hens, N. (2023). A tale of two datasets: Representativeness and generalisability of inference for samples of networks. Journal of the American Statistical Association, 118(544), 2213-2224.
+
+# Preliminaries and reproducibility
+groundhog needs restart the R session (shift+ctrl+F10, and then if it doesn't continue to restart due to insufficient computer performance, please reopen this file) and re-run groundhog. 
+Generally, ergm 4.7.5 is compatible with R 4.4.0. If it is not compatible, please adjust the date accordingly.
+```{r}
+library(groundhog)   # for handling dependencies
+groundhog.library(c("tidyverse",      # basic data handling
+                    "dplyr",          # data manipulation
+                    "tidyr",          # pivot_longer
+                    "stringr",        # string operations
+                    "purrr",          # functional iteration over networks in multi-ERGM models
+                    "tibble",         # tibbles for easier manipulation
+                    "network",        # network objects
+                    "networkDynamic", # dynamic network support
+                    "sna",            # social network analysis
+                    "ergm",           # exponential random graph models
+                    "ergm.multi",     # ERGM for multiple networks
+                    "statnet",        # core network modeling suite
+                    "haven"           # data import
+                    ),  "2024-12-01")
+sessionInfo()
+set.seed(1234) 
+```
+# Read data. 
+We use the 4th wave (WaveY) to analyze. Because relationships formed a few months after school entry tend to be more stable than those formed immediately upon entry.
+```{r}
+PupilsWaveY <- read_dta(file = "PupilsWaveY.dta")
+```
+
+# Clean data
+Replace values 98 and 99 in 'dislike' and 'bully' networks with NA
+```{r}
+PupilsWaveY <- PupilsWaveY %>%
+  mutate(across(disli1d:disli12d, ~ ifelse(. %in% c(98, 99), NA, .)))
+
+PupilsWaveY <- PupilsWaveY %>%
+  mutate(across(bully1d:bully12d, ~ ifelse(. %in% c(98, 99), NA, .)))
+```
+
+The average of five subject grades: mathematics, Dutch, gymnastics, biology, and hand labour.  Some pupils don't get all grades, so total scores can't be compared. This is why we choose the average. 
+```{r}
+PupilsWaveY$meangradd <- rowMeans(PupilsWaveY[, c("gradmatd", "gradbiod", "graddutd",  "gradgymd","gradhand")], na.rm = TRUE)
+summary(PupilsWaveY$meangradd)
+```
+
+## Recode 
+gender: 1 = female, 0 = male
+```{r}
+PupilsWaveY$sexd[PupilsWaveY$sexd == 3] <- NA
+PupilsWaveY$sexd <- 2 - PupilsWaveY$sexd 
+summary(PupilsWaveY$sexd)
+```
+## Control terms
+It is used as a control term. Because it may influence both academic performance and the formation of negative relationships. 
+Rows with missing values for opinions on grades were dropped, and the scale was reversed such that 1 indicates a negative opinion toward good grades, and 5 indicates a positive opinion.
+```{r}
+PupilsWaveY <- PupilsWaveY[!is.na(PupilsWaveY$opgraded), ] 
+PupilsWaveY$opgraded <- 6 - PupilsWaveY$opgraded
+summary(PupilsWaveY$opgraded)
+```
+
+Keep only complete cases for selected variables
+```{r}
+PupilsWaveY <- PupilsWaveY[complete.cases(PupilsWaveY[, c("sexd", "opgraded", "meangradd","schoolnr")]), ]
+```
+
+#Dislike network 
+Create loop structre for dislike network (The suffix 'D' indicates 'dislike')
+We used directed networks. 
+```{r}
+classlist1 <- split(PupilsWaveY, PupilsWaveY$schoolnr)
+networklist1 <- list()
+
+for (class_id in names(classlist1)) {
+  classnetD <- classlist1[[class_id]]
+  
+  # Create edge list from 'dislike' nominations
+  edgeD <- classnetD %>%
+    select(namenr, disli1d:disli12d) %>%
+    pivot_longer(cols = starts_with("disli"), names_to = "sourcevar", values_to = "value") %>%
+    filter(!is.na(value)) %>%
+    rename(from = namenr, to = value) %>%
+    relocate(to, .after = from)
+  
+  # Create node list with relevant attributes
+  nodelistD <- classnetD %>% 
+    select(namenr, sexd, opgraded, meangradd, schoolnr) %>% 
+    distinct() %>%
+    mutate(across(c(sexd, meangradd, opgraded), as.numeric),
+           schoolnr = as.character(schoolnr)) %>%
+    rename(name = namenr) %>%
+    mutate(name = as.character(name)) %>%
+    na.omit() %>%
+    filter(name %in% c(edgeD$from, edgeD$to))
+  
+  # Remove duplicate edges and self-loops
+  edgeD <- edgeD %>%
+    filter(from %in% nodelistD$name & to %in% nodelistD$name) %>%
+    distinct(from, to) %>%
+    mutate(across(c(from, to), as.character)) %>%
+    mutate(node1D = pmin(from, to),
+           node2D = pmax(from, to)) %>%
+    distinct(node1D, node2D, .keep_all = TRUE) %>%
+    filter(from != to) %>%
+    select(from, to)
+  
+  # Create directed network
+  gnD <- network(edgeD, directed = T, vertices = nodelistD, matrix.type = "edgelist", multiple = FALSE)  
+  networklist1[[class_id]] <- gnD
+}
+```
+
+# Fit multi-ERGM model for dislike networks
+The absdiff() term in the ERGM model captures the absolute difference between two nodes on a given covariate. And we control the influence of gwdsp and gwesp.
+Note: This set of code takes a few minutes to run and typically iterates about 16 times. 
+If an error occurs, it is often due to a version mismatch (different ABI) in the ergm.multi package. It needs to reinstall the packages in order: install.packages("ergm") and install.packages("ergm.multi", type = "source").We've used roundhog to handle this error.
+```{r}
+networkmultiD <- Networks(networklist1)
+fitD <- ergm(networkmultiD ~ N(~ edges + 
+                                nodecov("meangradd") + 
+                                absdiff("meangradd") +
+                                nodematch("sexd") + 
+                                nodecov("sexd") +
+                                nodecov("opgraded") +
+                                nodematch("opgraded")+
+                                gwesp(0.5, fixed=TRUE) + 
+                                gwdsp(0.5, fixed=TRUE)))
+summary(fitD)
+```
+#Results of the dislike network
+The coefficient for average grades ("meangradedd") is significantly negative, indicating that pupils with lower average grades are more likely to form dislike ties with their peers, supporting H1a. 
+
+However, the results contradict the expectations of H2a and H3a: greater heterogeneity in academic performance increases the probability of dislike tie formation, and pupils of different genders are more likely to form dislike ties. All findings are derived while controlling for pupils' opgraded.
+
+# Goodness of fit for dislike network
+```{r}
+fit.gofD <- gofN(fitD)
+summary(fit.gofD)
+plot(fit.gofD)
+```
+## Note: This warning maybe not related to ERGM. And we can get all plots.
+
+# Explanation of GoF 
+The variance of the Pearson residuals falls between 1 and 2, which is close to 1, suggesting that less important structural terms may have been omitted from the model (Krivitsky et al., 2023). In addition, the points are roughly randomly distributed without a clear pattern or funnel shape, indicating that the variance of the residuals is relatively uniform and the model fit is relatively good.
+
+These results indicate that the overall model fit remains suboptimal. Future improvements may include using directed networks and incorporating additional structural terms, filtering out classrooms with overly sparse networks, or adding further control variables.
+
+# Bullying network
+Create loop structre for bully network (The suffix 'B' indicates 'bully')
+```{r}
+classlist2 <- split(PupilsWaveY, PupilsWaveY$schoolnr)
+networklist2 <- list()
+
+for (class_id in names(classlist2)) {
+  classnetB <- classlist2[[class_id]]
+  
+  # Create edge list from 'bully' nominations
+  edgeB <- classnetB %>%
+    select(namenr, bully1d:bully12d) %>%
+    pivot_longer(cols = starts_with("bully"), names_to = "sourcevar", values_to = "value") %>%
+    filter(!is.na(value)) %>%
+    rename(from = namenr, to = value) %>%
+    relocate(to, .after = from)
+  
+  # Create node list
+  nodelistB <- classnetB %>% 
+    select(namenr, sexd, opgraded, meangradd, schoolnr) %>% 
+    distinct() %>%
+    mutate(across(c(sexd, meangradd, opgraded), as.numeric),
+           schoolnr = as.character(schoolnr)) %>%
+    rename(name = namenr) %>%
+    mutate(name = as.character(name)) %>%
+    na.omit() %>%
+    filter(name %in% c(edgeB$from, edgeB$to))
+  
+  # Remove duplicate edges and loops
+  edgeB <- edgeB %>%
+    filter(from %in% nodelistB$name & to %in% nodelistB$name) %>%
+    distinct(from, to) %>%
+    mutate(across(c(from, to), as.character)) %>%
+    mutate(node1B = pmin(from, to),
+           node2B = pmax(from, to)) %>%
+    distinct(node1B, node2B, .keep_all = TRUE) %>%
+    filter(from != to) %>%
+    select(from, to)
+  
+  # Create directed network
+  gnB <- network(edgeB, directed = T, vertices = nodelistB, matrix.type = "edgelist", multiple = FALSE)  
+  networklist2[[class_id]] <- gnB
+}
+```
+
+# Fit multi-ERGM model for bully networks
+Note: This set of code takes a few minutes to run and typically iterates about 16 times.
+```{r}
+networkmultiB <- Networks(networklist2)
+fitB <- ergm(networkmultiB ~ N(~ edges + 
+                                nodecov("meangradd") + 
+                                absdiff("meangradd") +
+                                nodematch("sexd") + 
+                                nodecov("sexd") +
+                                nodecov("opgraded") +
+                                nodematch("opgraded") + 
+                                gwesp(0.5, fixed = TRUE) + 
+                                gwdsp(0.5, fixed = TRUE)))
+summary(fitB) 
+```
+
+#Results of the bully network
+The coefficient for average grades ("meangradd") is negative but not significant, providing no evidence that pupils with lower grades are more likely to form bullying ties from others. Therefore, H1b is not supported. Similarly, the difference in average grades between pupils is positive but not significant. There is no evidence that grade homophily affects bullying networks. H2b is not supported.
+
+However, gender homophily is significantly positive, suggesting that pupils of the same gender have a higher probability of forming bullying ties, which supports H3b.
+
+# Goodness of fit
+```{r}
+fit.gofB <- gofN(fitB)
+summary(fit.gofB)
+plot(fit.gofB)
+```
+## Note: This warning maybe not related to ERGM. And we can get all plots.
+
+# Explanation of GoF 
+The std.dev of the Pearson residuals falls between 1 and 2.1, suggesting a better model fit for them (std.dev close to 1). The scale-location plots don't show systematic pattern, suggesting that the residuals are evenly distributed in the model. Therefore, the model fits well. 
+
+Future work may consider enriching the model with additional structural terms or implementing mlergm to account for school-level variation.
+
+#Example: dislike network in classe 12b
+```{r}
+net1 <- networklist1$`12b`
+library(scales) #adjust the size of nodes
+sexd <- get.vertex.attribute(net1,"sexd")
+colors <- ifelse(sexd == 0, "blue", "red")
+#The larger the node, the higher the average grade.
+sizes <- rescale(get.vertex.attribute(net1, "meangradd"), to = c(1.5, 5))
+plot(net1,
+     vertex.col = colors,
+     vertex.cex = sizes)
+
+legend("topright", legend = c("Male", "Female"), 
+       pch = 21, pt.bg = c("blue", "red"), pt.cex = 2, bty = "n")
+legend("bottomleft", legend = "Larger node = Higher grade", bty = "n", cex = 0.8)
+```
+
+#Example: bully network in classe 12b
+```{r}
+net2 <- networklist2$`12b`
+sexd <- get.vertex.attribute(net2,"sexd")
+colors <- ifelse(sexd == 0, "blue", "red")
+#The larger the node, the higher the average grade.
+sizes <- rescale(get.vertex.attribute(net2, "meangradd"), to = c(1.5, 5))
+plot(net2,
+     vertex.col = colors,
+     vertex.cex = sizes)
+
+legend("topright", legend = c("Male", "Female"), 
+       pch = 21, pt.bg = c("blue", "red"), pt.cex = 2, bty = "n")
+legend("bottomleft", legend = "Larger node = Higher grade", bty = "n", cex = 0.7)
+```
+# Conculsion & Discussion
+Can Homophily in Academic Achievement and Gender Foster Negative Networks?
+
+We found that lower academic performance is more likely to lead to the formation of negative relationships in the form of dislike ties, rather than bullying ties (although the effect in the bullying network is significant at the 0.1 level). However, we did not find a positive effect of academic homophily on dislike ties and bullying ties. The results suggest that differences in academic performance, rather than similarity, significantly contribute to dislike networks. Finally, we found that gender homophily does not have a positive effect on forming dislike ties. However, gender homophily has a significant positive effect on bullying ties.
+
+These findings tell us homophily does not always lead to preference; it may also result in certain types of negative interactions.
+
+Furthermore, we used a directed network and included some structural terms as controls, but we did not incorporate more structural terms. This is because the current model fits the data well, and adding more terms could lead to multicollinearity and overfitting issues. Therefore, we believe that the currently selected structural terms are sufficient.
