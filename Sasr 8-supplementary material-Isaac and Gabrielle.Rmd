@@ -47,6 +47,7 @@ Krivitsky, P. N., Coletti, P., & Hens, N. (2023). A tale of two datasets: Repres
 # Preliminaries and reproducibility
 groundhog needs restart the R session (shift+ctrl+F10, and then if it doesn't continue to restart due to insufficient computer performance, please reopen this file) and re-run groundhog. 
 Generally, ergm 4.7.5 is compatible with R 4.4.0. If it is not compatible, please adjust the date accordingly.
+GitHub: https://github.com/IsaacTianZ/Sasr-8-supplementary-material-Isaac-and-Gabrielle
 ```{r}
 library(groundhog)   # for handling dependencies
 groundhog.library(c("tidyverse",      # basic data handling
